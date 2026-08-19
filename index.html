@@ -1,0 +1,2339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0f172a">
+<title>Nutrition Tracker</title>
+
+<style>
+:root{
+  --bg:#f5f7fb;
+  --card:#ffffff;
+  --text:#172033;
+  --muted:#64748b;
+  --line:#e2e8f0;
+  --blue:#2563eb;
+  --green:#16a34a;
+  --orange:#f97316;
+  --orange-bg:#fff1e8;
+  --red:#dc2626;
+  --water:#0284c7;
+  --water-bg:#e0f2fe;
+}
+
+*{
+  box-sizing:border-box;
+}
+
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:Arial,Helvetica,sans-serif;
+}
+
+header{
+  background:#0f172a;
+  color:white;
+  padding:18px 16px;
+  position:sticky;
+  top:0;
+  z-index:10;
+}
+
+header h1{
+  margin:0;
+  font-size:21px;
+}
+
+main{
+  max-width:900px;
+  margin:auto;
+  padding:15px 12px 90px;
+}
+
+.card{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:15px;
+  padding:16px;
+  margin:12px 0;
+}
+
+.grid{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:10px;
+}
+
+.metric{
+  padding:12px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:white;
+}
+
+.label{
+  font-size:12px;
+  color:var(--muted);
+}
+
+.value{
+  font-size:20px;
+  font-weight:bold;
+  margin-top:4px;
+}
+
+.progress{
+  height:9px;
+  background:#e2e8f0;
+  border-radius:10px;
+  overflow:hidden;
+  margin:10px 0;
+}
+
+.progress div{
+  height:100%;
+  transition:.25s;
+}
+
+.protein-progress{
+  background:var(--green);
+}
+
+.water-progress{
+  background:var(--water);
+}
+
+.orange{
+  background:var(--orange-bg)!important;
+  border:1px solid #fb923c!important;
+  color:#c2410c;
+}
+
+.orange .value{
+  color:#ea580c;
+}
+
+.water-card{
+  background:var(--water-bg);
+  border:1px solid #7dd3fc;
+}
+
+.water-value{
+  color:#0369a1;
+}
+
+button{
+  border:0;
+  border-radius:9px;
+  padding:10px 13px;
+  background:var(--blue);
+  color:white;
+  font-weight:bold;
+  margin:3px;
+  cursor:pointer;
+}
+
+button.secondary{
+  background:#e8eef7;
+  color:#24324a;
+}
+
+button.danger{
+  background:#fee2e2;
+  color:#b91c1c;
+}
+
+button.water-button{
+  background:#0284c7;
+}
+
+input,
+select{
+  width:100%;
+  padding:10px;
+  border:1px solid #cbd5e1;
+  border-radius:8px;
+  box-sizing:border-box;
+  background:white;
+  color:var(--text);
+}
+
+label{
+  font-size:12px;
+  color:var(--muted);
+  display:block;
+  margin:9px 0 5px;
+}
+
+.formgrid{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:10px;
+}
+
+.row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  border-top:1px solid var(--line);
+  padding:11px 0;
+}
+
+.small{
+  font-size:12px;
+  color:var(--muted);
+}
+
+.empty{
+  color:var(--muted);
+  padding:8px 0;
+}
+
+nav{
+  position:fixed;
+  bottom:0;
+  left:0;
+  right:0;
+  background:white;
+  border-top:1px solid #ddd;
+  display:flex;
+  z-index:20;
+}
+
+nav button{
+  flex:1;
+  background:white;
+  color:#475569;
+  border-radius:0;
+  margin:0;
+}
+
+nav button.active{
+  color:var(--blue);
+}
+
+.modal{
+  display:none;
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.55);
+  align-items:flex-end;
+  z-index:30;
+}
+
+.modal.show{
+  display:flex;
+}
+
+.sheet{
+  background:white;
+  width:100%;
+  max-width:700px;
+  margin:auto;
+  border-radius:18px 18px 0 0;
+  padding:18px;
+  max-height:90vh;
+  overflow:auto;
+}
+
+@media(max-width:650px){
+
+  .grid{
+    grid-template-columns:repeat(2,1fr);
+  }
+
+  .formgrid{
+    grid-template-columns:1fr;
+  }
+
+  .value{
+    font-size:18px;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>🥗 Nutrition Tracker</h1>
+</header>
+
+<main id="app"></main>
+
+<nav>
+  <button data-view="today">🏠 Today</button>
+  <button data-view="foods">🥗 Foods</button>
+  <button data-view="settings">⚙️ Settings</button>
+</nav>
+
+<div id="modal" class="modal">
+  <div class="sheet" id="sheet"></div>
+</div>
+
+
+<script>
+
+/* =========================================================
+   STORAGE
+========================================================= */
+
+const STORAGE_KEY = "nutrition_tracker_v6";
+
+const DEFAULT_STATE = {
+
+  settings:{
+    weight:80,
+    proteinPerKg:2,
+    carbThreshold:50,
+    waterTarget:3
+  },
+
+  foods:[
+    {
+      id:"food1",
+      name:"Chicken breast",
+      cal:165,
+      protein:31,
+      fat:3.6,
+      carbs:0,
+      fibre:0
+    },
+
+    {
+      id:"food2",
+      name:"Egg",
+      cal:143,
+      protein:12.6,
+      fat:9.5,
+      carbs:0.7,
+      fibre:0
+    },
+
+    {
+      id:"food3",
+      name:"Rice cooked",
+      cal:130,
+      protein:2.7,
+      fat:0.3,
+      carbs:28.2,
+      fibre:0.4
+    }
+  ],
+
+  drinks:[
+    {
+      id:"drink1",
+      name:"Milk",
+      cal:61,
+      protein:3.2,
+      fat:3.3,
+      carbs:4.8,
+      fibre:0
+    },
+
+    {
+      id:"drink2",
+      name:"Orange juice",
+      cal:45,
+      protein:0.7,
+      fat:0.2,
+      carbs:10.4,
+      fibre:0.2
+    }
+  ],
+
+  meals:[],
+
+  water:{
+    date:"",
+    entries:[]
+  }
+
+};
+
+
+/* =========================================================
+   LOAD DATA
+========================================================= */
+
+let state;
+
+try{
+
+  state =
+    JSON.parse(
+      localStorage.getItem(STORAGE_KEY)
+    );
+
+  if(!state){
+    state =
+      structuredClone(DEFAULT_STATE);
+  }
+
+}catch(error){
+
+  state =
+    structuredClone(DEFAULT_STATE);
+
+}
+
+
+/* =========================================================
+   DATA MIGRATION
+========================================================= */
+
+if(!state.settings){
+  state.settings =
+    structuredClone(DEFAULT_STATE.settings);
+}
+
+if(state.settings.weight === undefined){
+  state.settings.weight = 80;
+}
+
+if(state.settings.proteinPerKg === undefined){
+  state.settings.proteinPerKg = 2;
+}
+
+if(state.settings.carbThreshold === undefined){
+  state.settings.carbThreshold = 50;
+}
+
+if(state.settings.waterTarget === undefined){
+  state.settings.waterTarget = 3;
+}
+
+if(!Array.isArray(state.foods)){
+  state.foods=[];
+}
+
+if(!Array.isArray(state.drinks)){
+  state.drinks=[];
+}
+
+if(!Array.isArray(state.meals)){
+  state.meals=[];
+}
+
+if(!state.water){
+  state.water={
+    date:"",
+    entries:[]
+  };
+}
+
+
+/* =========================================================
+   DATE HANDLING
+========================================================= */
+
+function todayDate(){
+
+  const d = new Date();
+
+  return d.getFullYear()+"-"+
+         String(d.getMonth()+1).padStart(2,"0")+"-"+
+         String(d.getDate()).padStart(2,"0");
+}
+
+
+function resetForNewDay(){
+
+  const today = todayDate();
+
+  if(state.water.date !== today){
+
+    state.water = {
+      date:today,
+      entries:[]
+    };
+
+    state.meals = [];
+
+    save();
+  }
+}
+
+
+resetForNewDay();
+
+
+/* =========================================================
+   GENERAL
+========================================================= */
+
+let currentView = "today";
+
+function save(){
+
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify(state)
+  );
+
+}
+
+function number(value){
+
+  return Number(value) || 0;
+
+}
+
+function uid(){
+
+  return Date.now().toString(36)+
+         Math.random().toString(36).substring(2,8);
+
+}
+
+function escapeHTML(value){
+
+  return String(value ?? "")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#039;");
+
+}
+
+
+/* =========================================================
+   TARGETS
+========================================================= */
+
+function proteinTarget(){
+
+  return number(state.settings.weight) *
+         number(state.settings.proteinPerKg);
+
+}
+
+function waterTargetML(){
+
+  return number(state.settings.waterTarget) * 1000;
+
+}
+
+function waterConsumed(){
+
+  return state.water.entries.reduce(
+    (total,entry)=>
+      total + number(entry.amount),
+    0
+  );
+
+}
+
+
+/* =========================================================
+   NUTRITION TOTALS
+========================================================= */
+
+function totals(){
+
+  const result = {
+
+    cal:0,
+    protein:0,
+    fat:0,
+    carbs:0,
+    fibre:0
+
+  };
+
+
+  state.meals.forEach(meal=>{
+
+    result.cal += number(meal.cal);
+
+    result.protein += number(meal.protein);
+
+    result.fat += number(meal.fat);
+
+    result.carbs += number(meal.carbs);
+
+    result.fibre += number(meal.fibre);
+
+  });
+
+
+  return result;
+
+}
+
+
+/* =========================================================
+   RENDER
+========================================================= */
+
+function render(){
+
+  document
+    .querySelectorAll("nav button")
+    .forEach(button=>{
+
+      button.classList.toggle(
+        "active",
+        button.dataset.view === currentView
+      );
+
+    });
+
+
+  if(currentView==="today"){
+
+    document.getElementById("app")
+      .innerHTML = todayPage();
+
+  }
+
+
+  if(currentView==="foods"){
+
+    document.getElementById("app")
+      .innerHTML = foodsPage();
+
+  }
+
+
+  if(currentView==="settings"){
+
+    document.getElementById("app")
+      .innerHTML = settingsPage();
+
+  }
+
+}
+
+
+/* =========================================================
+   TODAY
+========================================================= */
+
+function todayPage(){
+
+  const t = totals();
+
+  const proteinTargetValue =
+    proteinTarget();
+
+  const proteinPercent =
+    proteinTargetValue > 0
+    ?
+    Math.min(
+      100,
+      (t.protein/proteinTargetValue)*100
+    )
+    :
+    0;
+
+
+  const waterTarget =
+    waterTargetML();
+
+  const water =
+    waterConsumed();
+
+  const waterPercent =
+    waterTarget > 0
+    ?
+    Math.min(
+      100,
+      (water/waterTarget)*100
+    )
+    :
+    0;
+
+
+  const carbThreshold =
+    number(state.settings.carbThreshold);
+
+  const carbsExceeded =
+    t.carbs > carbThreshold;
+
+  const carbExcess =
+    Math.max(
+      0,
+      t.carbs-carbThreshold
+    );
+
+
+  return `
+
+  <!-- PROTEIN -->
+
+  <section class="card">
+
+    <h3>💪 Daily Protein Target</h3>
+
+    <div style="font-size:28px;font-weight:bold">
+
+      ${t.protein.toFixed(1)}
+      /
+      ${proteinTargetValue.toFixed(1)}
+      g
+
+    </div>
+
+    <div class="progress">
+
+      <div
+        class="protein-progress"
+        style="width:${proteinPercent}%">
+      </div>
+
+    </div>
+
+    <div class="small">
+
+      ${Math.max(
+        0,
+        proteinTargetValue-t.protein
+      ).toFixed(1)}
+      g remaining
+      ·
+      ${proteinPercent.toFixed(0)}%
+
+    </div>
+
+  </section>
+
+
+  <!-- WATER -->
+
+  <section class="card water-card">
+
+    <h3>💧 Water Today</h3>
+
+    <div
+      class="water-value"
+      style="font-size:28px;font-weight:bold">
+
+      ${(water/1000).toFixed(2)}
+      /
+      ${(waterTarget/1000).toFixed(2)}
+      L
+
+    </div>
+
+
+    <div class="progress">
+
+      <div
+        class="water-progress"
+        style="width:${waterPercent}%">
+      </div>
+
+    </div>
+
+
+    <div class="small">
+
+      ${waterPercent.toFixed(0)}%
+      of daily target
+
+      ${
+        water < waterTarget
+        ?
+        " · " +
+        ((waterTarget-water)/1000).toFixed(2) +
+        " L remaining"
+        :
+        " · Target reached ✓"
+      }
+
+    </div>
+
+
+    <div style="margin-top:8px">
+
+      <button
+        class="water-button"
+        onclick="addWater(250)">
+        +250 ml
+      </button>
+
+      <button
+        class="water-button"
+        onclick="addWater(500)">
+        +500 ml
+      </button>
+
+      <button
+        class="water-button"
+        onclick="addWater(1000)">
+        +1 L
+      </button>
+
+      <button
+        class="secondary"
+        onclick="customWater()">
+        Custom
+      </button>
+
+    </div>
+
+
+    ${
+      state.water.entries.length
+
+      ?
+
+      state.water.entries
+        .map((entry,index)=>`
+
+          <div class="row">
+
+            <div>
+
+              💧 ${entry.amount} ml
+
+              <div class="small">
+
+                ${entry.time || ""}
+
+              </div>
+
+            </div>
+
+            <button
+              class="danger"
+              onclick="deleteWater(${index})">
+
+              Delete
+
+            </button>
+
+          </div>
+
+        `)
+        .join("")
+
+      :
+
+      `<div class="empty">
+        No water recorded yet today.
+      </div>`
+
+    }
+
+  </section>
+
+
+  <!-- MACROS -->
+
+  <section class="grid">
+
+    <div class="metric">
+
+      <div class="label">
+        Calories
+      </div>
+
+      <div class="value">
+        ${t.cal.toFixed(0)}
+      </div>
+
+    </div>
+
+
+    <div class="metric">
+
+      <div class="label">
+        Protein
+      </div>
+
+      <div class="value">
+        ${t.protein.toFixed(1)} g
+      </div>
+
+    </div>
+
+
+    <div
+      class="metric ${carbsExceeded ? "orange":""}">
+
+      <div class="label">
+        Carbs
+      </div>
+
+      <div class="value">
+        ${t.carbs.toFixed(1)} g
+      </div>
+
+    </div>
+
+
+    <div class="metric">
+
+      <div class="label">
+        Fat
+      </div>
+
+      <div class="value">
+        ${t.fat.toFixed(1)} g
+      </div>
+
+    </div>
+
+  </section>
+
+
+  <!-- CARB WARNING -->
+
+  ${
+    carbsExceeded
+
+    ?
+
+    `
+
+    <section class="card orange">
+
+      <strong>
+        🟠 Carbs threshold exceeded
+      </strong>
+
+      <div style="margin-top:6px">
+
+        Consumed:
+        <strong>
+          ${t.carbs.toFixed(1)} g
+        </strong>
+
+      </div>
+
+
+      <div style="margin-top:4px">
+
+        Threshold:
+        <strong>
+          ${carbThreshold.toFixed(1)} g
+        </strong>
+
+      </div>
+
+
+      <div style="margin-top:4px">
+
+        Over by:
+        <strong>
+          ${carbExcess.toFixed(1)} g
+        </strong>
+
+      </div>
+
+    </section>
+
+    `
+
+    :
+
+    `
+
+    <section class="card">
+
+      <strong>
+        Carbs
+      </strong>
+
+      <div class="small" style="margin-top:5px">
+
+        ${t.carbs.toFixed(1)}
+        /
+        ${carbThreshold.toFixed(1)}
+        g threshold
+
+      </div>
+
+    </section>
+
+    `
+  }
+
+
+  <!-- MEALS -->
+
+  <section class="card">
+
+    <h3>🍽️ Today's Meals</h3>
+
+    <button onclick="addFoodToMeal()">
+      ＋ Food
+    </button>
+
+    <button onclick="addDrinkToMeal()">
+      ＋ Drink
+    </button>
+
+
+    ${
+      state.meals.length
+
+      ?
+
+      state.meals
+        .map((meal,index)=>`
+
+          <div class="row">
+
+            <div>
+
+              <strong>
+                ${escapeHTML(meal.name)}
+              </strong>
+
+              <div class="small">
+
+                ${meal.amount}${meal.unit}
+
+                ·
+
+                ${meal.cal.toFixed(0)}
+                kcal
+
+                ·
+
+                P ${meal.protein.toFixed(1)}g
+
+                ·
+
+                C ${meal.carbs.toFixed(1)}g
+
+              </div>
+
+            </div>
+
+
+            <div>
+
+              <button
+                class="secondary"
+                onclick="editMeal(${index})">
+
+                Edit
+
+              </button>
+
+
+              <button
+                class="danger"
+                onclick="deleteMeal(${index})">
+
+                Delete
+
+              </button>
+
+            </div>
+
+          </div>
+
+        `)
+        .join("")
+
+      :
+
+      `<div class="empty">
+        No meals recorded today.
+      </div>`
+
+    }
+
+  </section>
+
+  `;
+
+}
+
+
+/* =========================================================
+   WATER
+========================================================= */
+
+function addWater(amount){
+
+  state.water.entries.push({
+
+    amount:amount,
+
+    time:new Date().toLocaleTimeString(
+      [],
+      {
+        hour:"2-digit",
+        minute:"2-digit"
+      }
+    )
+
+  });
+
+
+  save();
+
+  render();
+
+}
+
+
+function customWater(){
+
+  const amount =
+    prompt("Enter water amount in ml:");
+
+  const ml =
+    number(amount);
+
+
+  if(ml <= 0) return;
+
+  addWater(ml);
+
+}
+
+
+function deleteWater(index){
+
+  if(!confirm("Delete this water entry?")){
+    return;
+  }
+
+
+  state.water.entries.splice(
+    index,
+    1
+  );
+
+
+  save();
+
+  render();
+
+}
+
+
+/* =========================================================
+   FOOD LIBRARY
+========================================================= */
+
+function foodsPage(){
+
+  return `
+
+  <section class="card">
+
+    <h3>🥗 Foods</h3>
+
+    <div class="small">
+
+      Nutrition values are stored per 100 g.
+
+    </div>
+
+
+    <button onclick="foodForm(false)">
+      ＋ Add Food
+    </button>
+
+
+    ${
+      state.foods.length
+
+      ?
+
+      state.foods
+        .map(
+          (food,index)=>
+            libraryItem(
+              food,
+              index,
+              false
+            )
+        )
+        .join("")
+
+      :
+
+      `<div class="empty">
+        No foods added.
+      </div>`
+
+    }
+
+  </section>
+
+
+  <section class="card">
+
+    <h3>🥤 Drinks</h3>
+
+    <div class="small">
+
+      Nutrition values are stored per 100 ml.
+
+    </div>
+
+
+    <button onclick="foodForm(true)">
+      ＋ Add Drink
+    </button>
+
+
+    ${
+      state.drinks.length
+
+      ?
+
+      state.drinks
+        .map(
+          (drink,index)=>
+            libraryItem(
+              drink,
+              index,
+              true
+            )
+        )
+        .join("")
+
+      :
+
+      `<div class="empty">
+        No drinks added.
+      </div>`
+
+    }
+
+  </section>
+
+  `;
+
+}
+
+
+function libraryItem(
+  item,
+  index,
+  isDrink
+){
+
+  return `
+
+  <div class="row">
+
+    <div>
+
+      <strong>
+        ${escapeHTML(item.name)}
+      </strong>
+
+      <div class="small">
+
+        ${item.cal} kcal
+        ·
+        P ${item.protein}g
+        ·
+        C ${item.carbs}g
+
+        per 100
+        ${isDrink ? "ml":"g"}
+
+      </div>
+
+    </div>
+
+
+    <div>
+
+      <button
+        class="secondary"
+        onclick="foodForm(${isDrink},${index})">
+
+        Edit
+
+      </button>
+
+
+      <button
+        class="danger"
+        onclick="deleteLibraryItem(${isDrink},${index})">
+
+        Delete
+
+      </button>
+
+    </div>
+
+  </div>
+
+  `;
+
+}
+
+
+/* =========================================================
+   FOOD / DRINK FORM
+========================================================= */
+
+function foodForm(
+  isDrink,
+  index=null
+){
+
+  const array =
+    isDrink
+    ? state.drinks
+    : state.foods;
+
+
+  const item =
+    index === null
+    ? {}
+    : array[index];
+
+
+  const unit =
+    isDrink ? "ml":"g";
+
+
+  openModal(`
+
+    <h3>
+
+      ${index === null ? "Add":"Edit"}
+
+      ${isDrink ? "🥤 Drink":"🥗 Food"}
+
+    </h3>
+
+
+    <label>
+      Name
+    </label>
+
+    <input
+      id="itemName"
+      value="${escapeHTML(item.name || "")}">
+
+
+    <div class="formgrid">
+
+      <div>
+
+        <label>
+          Calories / 100 ${unit}
+        </label>
+
+        <input
+          id="itemCalories"
+          type="number"
+          step="0.01"
+          value="${item.cal ?? ""}">
+
+      </div>
+
+
+      <div>
+
+        <label>
+          Protein / 100 ${unit}
+        </label>
+
+        <input
+          id="itemProtein"
+          type="number"
+          step="0.01"
+          value="${item.protein ?? ""}">
+
+      </div>
+
+
+      <div>
+
+        <label>
+          Fat / 100 ${unit}
+        </label>
+
+        <input
+          id="itemFat"
+          type="number"
+          step="0.01"
+          value="${item.fat ?? ""}">
+
+      </div>
+
+
+      <div>
+
+        <label>
+          Carbs / 100 ${unit}
+        </label>
+
+        <input
+          id="itemCarbs"
+          type="number"
+          step="0.01"
+          value="${item.carbs ?? ""}">
+
+      </div>
+
+
+      <div>
+
+        <label>
+          Fibre / 100 ${unit}
+        </label>
+
+        <input
+          id="itemFibre"
+          type="number"
+          step="0.01"
+          value="${item.fibre ?? ""}">
+
+      </div>
+
+    </div>
+
+
+    <button
+      onclick="saveLibraryItem(${isDrink},${index === null ? "null":index})">
+
+      Save
+
+    </button>
+
+
+    <button
+      class="secondary"
+      onclick="closeModal()">
+
+      Cancel
+
+    </button>
+
+  `);
+
+}
+
+
+function saveLibraryItem(
+  isDrink,
+  index
+){
+
+  const item = {
+
+    id:
+      index === null
+      ?
+      uid()
+      :
+      (
+        isDrink
+        ?
+        state.drinks[index]
+        :
+        state.foods[index]
+      ).id,
+
+    name:
+      document
+        .getElementById("itemName")
+        .value
+        .trim(),
+
+    cal:
+      number(
+        document
+          .getElementById("itemCalories")
+          .value
+      ),
+
+    protein:
+      number(
+        document
+          .getElementById("itemProtein")
+          .value
+      ),
+
+    fat:
+      number(
+        document
+          .getElementById("itemFat")
+          .value
+      ),
+
+    carbs:
+      number(
+        document
+          .getElementById("itemCarbs")
+          .value
+      ),
+
+    fibre:
+      number(
+        document
+          .getElementById("itemFibre")
+          .value
+      )
+
+  };
+
+
+  if(!item.name){
+
+    alert(
+      "Please enter a name."
+    );
+
+    return;
+
+  }
+
+
+  const array =
+    isDrink
+    ?
+    state.drinks
+    :
+    state.foods;
+
+
+  if(index === null){
+
+    array.push(item);
+
+  }else{
+
+    array[index] = item;
+
+  }
+
+
+  save();
+
+  closeModal();
+
+  render();
+
+}
+
+
+function deleteLibraryItem(
+  isDrink,
+  index
+){
+
+  if(!confirm("Delete this item?")){
+    return;
+  }
+
+
+  const array =
+    isDrink
+    ?
+    state.drinks
+    :
+    state.foods;
+
+
+  array.splice(index,1);
+
+  save();
+
+  render();
+
+}
+
+
+/* =========================================================
+   ADD FOOD
+========================================================= */
+
+function addFoodToMeal(){
+
+  if(!state.foods.length){
+
+    alert(
+      "Please add a food first."
+    );
+
+    return;
+
+  }
+
+
+  const options =
+    state.foods
+      .map(food=>`
+
+        <option value="${food.id}">
+
+          ${escapeHTML(food.name)}
+
+        </option>
+
+      `)
+      .join("");
+
+
+  openModal(`
+
+    <h3>＋ Add Food</h3>
+
+
+    <label>
+      Food
+    </label>
+
+    <select id="mealItem">
+
+      ${options}
+
+    </select>
+
+
+    <label>
+      Amount (g)
+    </label>
+
+    <input
+      id="mealAmount"
+      type="number"
+      min="0"
+      value="100">
+
+
+    <button
+      onclick="saveFoodMeal()">
+
+      Add
+
+    </button>
+
+
+    <button
+      class="secondary"
+      onclick="closeModal()">
+
+      Cancel
+
+    </button>
+
+  `);
+
+}
+
+
+function saveFoodMeal(){
+
+  const food =
+    state.foods.find(
+      x =>
+        x.id ===
+        document.getElementById("mealItem").value
+    );
+
+
+  const amount =
+    number(
+      document
+        .getElementById("mealAmount")
+        .value
+    );
+
+
+  if(!food || amount <= 0){
+    return;
+  }
+
+
+  const multiplier =
+    amount/100;
+
+
+  state.meals.push({
+
+    name:food.name,
+
+    amount:amount,
+
+    unit:" g",
+
+    cal:
+      food.cal*multiplier,
+
+    protein:
+      food.protein*multiplier,
+
+    fat:
+      food.fat*multiplier,
+
+    carbs:
+      food.carbs*multiplier,
+
+    fibre:
+      food.fibre*multiplier
+
+  });
+
+
+  save();
+
+  closeModal();
+
+  render();
+
+}
+
+
+/* =========================================================
+   ADD DRINK
+========================================================= */
+
+function addDrinkToMeal(){
+
+  if(!state.drinks.length){
+
+    alert(
+      "Please add a drink first."
+    );
+
+    return;
+
+  }
+
+
+  const options =
+    state.drinks
+      .map(drink=>`
+
+        <option value="${drink.id}">
+
+          ${escapeHTML(drink.name)}
+
+        </option>
+
+      `)
+      .join("");
+
+
+  openModal(`
+
+    <h3>🥤 Add Drink</h3>
+
+
+    <label>
+      Drink
+    </label>
+
+    <select id="drinkItem">
+
+      ${options}
+
+    </select>
+
+
+    <label>
+      Amount (ml)
+    </label>
+
+    <input
+      id="drinkAmount"
+      type="number"
+      min="0"
+      value="100">
+
+
+    <button
+      onclick="saveDrinkMeal()">
+
+      Add Drink
+
+    </button>
+
+
+    <button
+      class="secondary"
+      onclick="closeModal()">
+
+      Cancel
+
+    </button>
+
+  `);
+
+}
+
+
+function saveDrinkMeal(){
+
+  const drink =
+    state.drinks.find(
+      x =>
+        x.id ===
+        document.getElementById("drinkItem").value
+    );
+
+
+  const amount =
+    number(
+      document
+        .getElementById("drinkAmount")
+        .value
+    );
+
+
+  if(!drink || amount <= 0){
+    return;
+  }
+
+
+  const multiplier =
+    amount/100;
+
+
+  state.meals.push({
+
+    name:drink.name,
+
+    amount:amount,
+
+    unit:" ml",
+
+    cal:
+      drink.cal*multiplier,
+
+    protein:
+      drink.protein*multiplier,
+
+    fat:
+      drink.fat*multiplier,
+
+    carbs:
+      drink.carbs*multiplier,
+
+    fibre:
+      drink.fibre*multiplier
+
+  });
+
+
+  save();
+
+  closeModal();
+
+  render();
+
+}
+
+
+/* =========================================================
+   EDIT MEAL
+========================================================= */
+
+function editMeal(index){
+
+  const meal =
+    state.meals[index];
+
+
+  const isDrink =
+    meal.unit.includes("ml");
+
+
+  const array =
+    isDrink
+    ?
+    state.drinks
+    :
+    state.foods;
+
+
+  const options =
+    array
+      .map(item=>`
+
+        <option
+          value="${item.id}"
+          ${item.name === meal.name
+            ? "selected"
+            : ""}>
+
+          ${escapeHTML(item.name)}
+
+        </option>
+
+      `)
+      .join("");
+
+
+  openModal(`
+
+    <h3>
+      Edit
+      ${isDrink ? "🥤 Drink":"🥗 Food"}
+    </h3>
+
+
+    <label>
+      ${isDrink ? "Drink":"Food"}
+    </label>
+
+    <select id="editItem">
+
+      ${options}
+
+    </select>
+
+
+    <label>
+      Amount (${isDrink ? "ml":"g"})
+    </label>
+
+    <input
+      id="editAmount"
+      type="number"
+      min="0"
+      value="${meal.amount}">
+
+
+    <button
+      onclick="updateMeal(${index},${isDrink})">
+
+      Save Changes
+
+    </button>
+
+
+    <button
+      class="secondary"
+      onclick="closeModal()">
+
+      Cancel
+
+    </button>
+
+  `);
+
+}
+
+
+function updateMeal(
+  index,
+  isDrink
+){
+
+  const array =
+    isDrink
+    ?
+    state.drinks
+    :
+    state.foods;
+
+
+  const item =
+    array.find(
+      x =>
+        x.id ===
+        document.getElementById("editItem").value
+    );
+
+
+  const amount =
+    number(
+      document
+        .getElementById("editAmount")
+        .value
+    );
+
+
+  if(!item || amount <= 0){
+    return;
+  }
+
+
+  const multiplier =
+    amount/100;
+
+
+  state.meals[index] = {
+
+    name:item.name,
+
+    amount:amount,
+
+    unit:
+      isDrink
+      ?
+      " ml"
+      :
+      " g",
+
+    cal:
+      item.cal*multiplier,
+
+    protein:
+      item.protein*multiplier,
+
+    fat:
+      item.fat*multiplier,
+
+    carbs:
+      item.carbs*multiplier,
+
+    fibre:
+      item.fibre*multiplier
+
+  };
+
+
+  save();
+
+  closeModal();
+
+  render();
+
+}
+
+
+function deleteMeal(index){
+
+  if(!confirm("Delete this meal?")){
+    return;
+  }
+
+
+  state.meals.splice(index,1);
+
+  save();
+
+  render();
+
+}
+
+
+/* =========================================================
+   SETTINGS
+========================================================= */
+
+function settingsPage(){
+
+  const settings =
+    state.settings;
+
+
+  return `
+
+  <section class="card">
+
+    <h3>⚙️ Settings</h3>
+
+
+    <div class="formgrid">
+
+      <div>
+
+        <label>
+          Body weight (kg)
+        </label>
+
+        <input
+          id="weightInput"
+          type="number"
+          min="0"
+          step="0.1"
+          value="${settings.weight}">
+
+      </div>
+
+
+      <div>
+
+        <label>
+          Protein target (g per kg body weight)
+        </label>
+
+        <input
+          id="proteinPerKgInput"
+          type="number"
+          min="0"
+          step="0.1"
+          value="${settings.proteinPerKg}">
+
+      </div>
+
+
+      <div>
+
+        <label>
+          Carb threshold (g/day)
+        </label>
+
+        <input
+          id="carbThresholdInput"
+          type="number"
+          min="0"
+          step="0.1"
+          value="${settings.carbThreshold}">
+
+      </div>
+
+
+      <div>
+
+        <label>
+          💧 Water target (litres/day)
+        </label>
+
+        <input
+          id="waterTargetInput"
+          type="number"
+          min="0"
+          step="0.1"
+          value="${settings.waterTarget}">
+
+      </div>
+
+    </div>
+
+
+    <section
+      class="card"
+      style="background:#f8fafc">
+
+      <div class="small">
+        Calculated daily protein target
+      </div>
+
+
+      <div
+        style="font-size:30px;font-weight:bold">
+
+        ${proteinTarget().toFixed(1)}
+        g/day
+
+      </div>
+
+
+      <div class="small">
+
+        ${settings.weight}
+        kg
+        ×
+        ${settings.proteinPerKg}
+        g/kg
+
+      </div>
+
+    </section>
+
+
+    <section
+      class="card water-card">
+
+      <div class="small">
+        Daily water target
+      </div>
+
+
+      <div
+        class="water-value"
+        style="font-size:30px;font-weight:bold">
+
+        ${number(settings.waterTarget).toFixed(1)}
+        L/day
+
+      </div>
+
+    </section>
+
+
+    <button onclick="saveSettings()">
+
+      Save Settings
+
+    </button>
+
+  </section>
+
+  `;
+
+}
+
+
+function saveSettings(){
+
+  const weight =
+    number(
+      document
+        .getElementById("weightInput")
+        .value
+    );
+
+
+  const proteinPerKg =
+    number(
+      document
+        .getElementById("proteinPerKgInput")
+        .value
+    );
+
+
+  const carbThreshold =
+    number(
+      document
+        .getElementById("carbThresholdInput")
+        .value
+    );
+
+
+  const waterTarget =
+    number(
+      document
+        .getElementById("waterTargetInput")
+        .value
+    );
+
+
+  if(weight <= 0){
+
+    alert(
+      "Please enter a valid body weight."
+    );
+
+    return;
+
+  }
+
+
+  if(proteinPerKg <= 0){
+
+    alert(
+      "Please enter a valid protein target."
+    );
+
+    return;
+
+  }
+
+
+  if(carbThreshold < 0){
+
+    alert(
+      "Please enter a valid carb threshold."
+    );
+
+    return;
+
+  }
+
+
+  if(waterTarget <= 0){
+
+    alert(
+      "Please enter a valid water target."
+    );
+
+    return;
+
+  }
+
+
+  state.settings = {
+
+    weight:weight,
+
+    proteinPerKg:proteinPerKg,
+
+    carbThreshold:carbThreshold,
+
+    waterTarget:waterTarget
+
+  };
+
+
+  save();
+
+  render();
+
+}
+
+
+/* =========================================================
+   MODAL
+========================================================= */
+
+function openModal(html){
+
+  document.getElementById("sheet")
+    .innerHTML = html;
+
+  document.getElementById("modal")
+    .classList.add("show");
+
+}
+
+
+function closeModal(){
+
+  document.getElementById("modal")
+    .classList.remove("show");
+
+}
+
+
+/* =========================================================
+   NAVIGATION
+========================================================= */
+
+document
+  .querySelectorAll("nav button")
+  .forEach(button=>{
+
+    button.addEventListener(
+      "click",
+      ()=>{
+
+        currentView =
+          button.dataset.view;
+
+        render();
+
+      }
+    );
+
+  });
+
+
+/* =========================================================
+   CLOSE MODAL OUTSIDE
+========================================================= */
+
+document
+  .getElementById("modal")
+  .addEventListener(
+    "click",
+    event=>{
+
+      if(event.target.id==="modal"){
+        closeModal();
+      }
+
+    }
+  );
+
+
+/* =========================================================
+   START
+========================================================= */
+
+render();
+
+</script>
+
+</body>
+</html>
